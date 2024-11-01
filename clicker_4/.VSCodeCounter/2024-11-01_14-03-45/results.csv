@@ -1,0 +1,23 @@
+"filename", "language", "JSON with Comments", "TypeScript", "JSON", "Markdown", "Ignore", "FunC", "comment", "blank", "total"
+"d:\practice\ton\tutorial\clicker_4\.prettierignore", "Ignore", 0, 0, 0, 0, 1, 0, 0, 1, 2
+"d:\practice\ton\tutorial\clicker_4\.prettierrc", "JSON", 0, 0, 7, 0, 0, 0, 0, 1, 8
+"d:\practice\ton\tutorial\clicker_4\README.md", "Markdown", 0, 0, 0, 15, 0, 0, 0, 12, 27
+"d:\practice\ton\tutorial\clicker_4\contracts\clicker.fc", "FunC", 0, 0, 0, 0, 0, 131, 15, 20, 166
+"d:\practice\ton\tutorial\clicker_4\contracts\helpers\op.fc", "FunC", 0, 0, 0, 0, 0, 5, 0, 3, 8
+"d:\practice\ton\tutorial\clicker_4\contracts\imports.fc", "FunC", 0, 0, 0, 0, 0, 2, 0, 1, 3
+"d:\practice\ton\tutorial\clicker_4\contracts\imports\stdlib.fc", "FunC", 0, 0, 0, 0, 0, 180, 312, 133, 625
+"d:\practice\ton\tutorial\clicker_4\contracts\tracker.fc", "FunC", 0, 0, 0, 0, 0, 66, 9, 17, 92
+"d:\practice\ton\tutorial\clicker_4\jest.config.ts", "TypeScript", 0, 7, 0, 0, 0, 0, 0, 3, 10
+"d:\practice\ton\tutorial\clicker_4\libs\consts.ts", "TypeScript", 0, 4, 0, 0, 0, 0, 0, 2, 6
+"d:\practice\ton\tutorial\clicker_4\libs\crc32.ts", "TypeScript", 0, 38, 0, 0, 0, 0, 0, 1, 39
+"d:\practice\ton\tutorial\clicker_4\libs\helper.ts", "TypeScript", 0, 8, 0, 0, 0, 0, 0, 2, 10
+"d:\practice\ton\tutorial\clicker_4\package-lock.json", "JSON", 0, 0, 5661, 0, 0, 0, 0, 1, 5662
+"d:\practice\ton\tutorial\clicker_4\package.json", "JSON", 0, 0, 24, 0, 0, 0, 0, 1, 25
+"d:\practice\ton\tutorial\clicker_4\scripts\deployClicker.ts", "TypeScript", 0, 8, 0, 0, 0, 0, 1, 5, 14
+"d:\practice\ton\tutorial\clicker_4\tests\Clicker.spec.ts", "TypeScript", 0, 134, 0, 0, 0, 0, 0, 27, 161
+"d:\practice\ton\tutorial\clicker_4\tsconfig.json", "JSON with Comments", 12, 0, 0, 0, 0, 0, 0, 1, 13
+"d:\practice\ton\tutorial\clicker_4\wrappers\Clicker.compile.ts", "TypeScript", 0, 5, 0, 0, 0, 0, 0, 2, 7
+"d:\practice\ton\tutorial\clicker_4\wrappers\Clicker.ts", "TypeScript", 0, 70, 0, 0, 0, 0, 0, 13, 83
+"d:\practice\ton\tutorial\clicker_4\wrappers\Tracker.compile.ts", "TypeScript", 0, 5, 0, 0, 0, 0, 0, 2, 7
+"d:\practice\ton\tutorial\clicker_4\wrappers\Tracker.ts", "TypeScript", 0, 40, 0, 0, 0, 0, 0, 8, 48
+"Total", "-", 12, 319, 5692, 15, 1, 384, 337, 256, 7016

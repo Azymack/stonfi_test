@@ -1,0 +1,145 @@
+#include "imports.fc";
+
+(cell, cell) load_data() inline {
+  slice ds = get_data().begin_parse();
+  cell tracker_code = ds~load_ref();
+  cell dic = ds~load_dict();
+  ds.end_parse();
+  return (tracker_code, dic);
+}
+
+() save_data(cell tracker_code, cell dic) impure inline {
+  set_data(
+    begin_cell()
+    .store_ref(tracker_code)
+    .store_dict(dic)
+    .end_cell()
+  );
+}
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+  int opcode = in_msg_body~load_uint(32);
+
+  ;; user/tracker address
+  var cs = in_msg_full.begin_parse();
+  cs~load_uint(4);
+  slice sender_addr = cs~load_msg_addr();
+
+  (cell tracker_code, cell dic) = load_data();
+
+  ;; deploy op
+  if (opcode == 0) {
+    return();
+  }
+  ;; vote op
+  if (opcode == op::click) {
+    ;; vote id
+    int vote_id = in_msg_body~load_uint(64);
+
+
+    ;; send raw message to child contract
+    cell state_init = calculate_state_init(sender_addr, my_address(), tracker_code);
+    slice tracker_addr = calcualte_tracker_addr(sender_addr, my_address(), tracker_code);
+
+    cell msg_body_to_tracker = begin_cell().store_uint(vote_id, 64).end_cell();
+    var msg_to_tracker = 
+      begin_cell()
+      .store_uint(0x18, 6)
+      .store_slice(tracker_addr)
+      .store_coins(msg_value - 100000000)
+      .store_uint(7, 108)
+      .store_ref(state_init)
+      .store_ref(msg_body_to_tracker);
+
+    send_raw_message(msg_to_tracker.end_cell(), 1 | 16);
+    return();
+  }
+  ;; tracker response op
+  if (opcode == op::response) {
+    ;; status_code, which we get from the tracker contract's response message
+    ;; 0: change
+    ;; 1: new
+    int status_code = in_msg_body~load_uint(64);
+    int new_vote_id = in_msg_body~load_uint(64);
+    int vote_id = in_msg_body~load_uint(64);
+
+    slice user_addr_in_msg = in_msg_body~load_msg_addr();
+    throw_unless(error:wrong_tracker, equal_slice_bits(sender_addr, calcualte_tracker_addr(user_addr_in_msg, my_address(), tracker_code)));
+    ;; change the value of the vote
+    if (status_code == 0) {
+      ;; decrase old & increase new the value of vote respectively
+      (slice s_to_decrease, int success_1?) = udict_get?(dic, 64, vote_id);
+      (slice s_to_increase, int success_2?) = udict_get?(dic, 64, new_vote_id);
+      int val_to_decrease = s_to_decrease~load_uint(32);
+      int val_to_increase = 0;
+      if (success_2? == -1) {
+        val_to_increase = s_to_increase~load_uint(32);
+      }
+      (dic, int success_3?) = udict_delete?(dic, 64, vote_id);
+      (dic, int success_4?) = udict_delete?(dic, 64, new_vote_id);
+      dic = udict_set(dic, 64, vote_id, begin_cell().store_uint(val_to_decrease - 1, 32).end_cell().begin_parse());
+      dic = udict_set(dic, 64, new_vote_id, begin_cell().store_uint(val_to_increase + 1, 32).end_cell().begin_parse());
+      save_data(tracker_code, dic);
+    }
+    ;; add new vote
+    if status_code == 1 {
+      ;; just set the value as 1
+      (slice s_to_add, int success?) = udict_get?(dic, 64, new_vote_id);
+      int val_to_add = 1;
+      if (success? == -1) {
+        val_to_add = s_to_add~load_uint(32) + 1;
+      }
+      (dic, int success_?) = udict_delete?(dic, 64, new_vote_id);
+      dic = udict_set(dic, 64, new_vote_id, begin_cell().store_uint(val_to_add, 32).end_cell().begin_parse());
+      save_data(tracker_code,dic);
+    }
+    var msg_to_user = 
+      begin_cell()
+      .store_uint(0x18, 6)
+      .store_slice(user_addr_in_msg)
+      .store_coins(msg_value - 100000000)
+      ;; .store_grams(0)
+      .store_uint(0, 107);
+    send_raw_message(msg_to_user.end_cell(), 128);
+    return();
+  }
+
+  ;; wrong operation
+  throw(error:wrong_op);
+}
+
+cell calculate_state_init(slice user_addr, slice clicker_addr, cell tracker_code) inline {
+    return begin_cell()
+    .store_uint(0, 2)
+    .store_maybe_ref(tracker_code)
+    .store_maybe_ref(
+        begin_cell()
+        .store_uint(0, 64)
+        .store_slice(user_addr)
+        .store_slice(clicker_addr)
+        .end_cell()
+    )
+    .store_uint(0, 1)
+    .end_cell();
+}
+
+slice calcualte_tracker_addr(slice user_addr, slice clicker_addr, cell tracker_code) inline {
+  cell state_init = calculate_state_init(user_addr, clicker_addr, tracker_code);
+  return begin_cell()
+  .store_uint(2, 2)
+  .store_uint(0, 1)
+  .store_int(0, 8)
+  .store_uint(cell_hash(state_init), 256)
+  .end_cell()
+  .begin_parse();
+}
+
+cell get_dic() method_id {
+  (_, cell dic) = load_data();
+  return dic;
+}
+
+slice get_tracker_address(slice user_addr) method_id {
+    (cell tracker_code, cell dic) = load_data();
+    return calcualte_tracker_addr(user_addr, my_address(), tracker_code);
+}

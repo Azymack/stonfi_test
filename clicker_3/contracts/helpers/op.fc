@@ -1,0 +1,7 @@
+const op::click = "click"c;
+const op::add = "add"c;
+const op::remove = "remove"c;
+
+const error:wrong_op = 6;
+const error:not_admin = 7;
+const error:auth = 8;

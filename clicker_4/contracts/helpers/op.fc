@@ -1,0 +1,7 @@
+const op::click = "click"c;
+
+const op::response = "response"c;
+
+const error:wrong_op = 6;
+const error:wrong_clicker = 7;
+const error:wrong_tracker = 8;

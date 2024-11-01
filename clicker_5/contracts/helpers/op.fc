@@ -1,0 +1,14 @@
+const op::click = "click"c;
+
+const op::response = "response"c;
+
+const error:wrong_op = 6;
+const error:wrong_clicker = 7;
+const error:wrong_tracker = 8;
+
+const status::add::tracker = 1;
+const status::change::tracker = 0;
+const status::repeat::tracker = 2;
+
+const status::add::vote = 1;
+const status::remove::vote = 0;

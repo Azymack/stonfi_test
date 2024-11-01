@@ -1,0 +1,74 @@
+#include "imports.fc";
+
+(int, slice, cell) load_data() inline {
+  slice ds = get_data().begin_parse();
+  int count = ds~load_uint(64);
+  slice amdin_addr = ds~load_msg_addr();
+  cell dic = ds~load_dict();
+  ds.end_parse();
+  return (count, amdin_addr, dic);
+}
+
+() save_data(int count, slice admin_addr, cell dic) impure inline {
+  set_data(
+    begin_cell()
+    .store_uint(count, 64)
+    .store_slice(admin_addr)
+    .store_dict(dic)
+    .end_cell()
+  );
+}
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+  int opcode = in_msg_body~load_uint(32);
+
+  var cs = in_msg_full.begin_parse();
+  cs~load_uint(4);
+  slice sender_addr = cs~load_msg_addr();
+
+  (int count, slice admin_addr, cell dic) = load_data();
+
+  ;; click/vote op
+  if (opcode == op::click) {
+    int hashed_sender_addr = slice_hash(sender_addr);
+    (slice x , int key?) = udict_get?(dic, 256, hashed_sender_addr);
+    if (key? == -1) {
+      count += 1;
+      save_data(count, admin_addr, dic);
+      return();
+    }
+
+    throw(error:auth);
+  }
+  ;; add user
+  if (opcode == op::add) {
+    throw_unless(error:not_admin, sender_addr.slice_bits() == admin_addr.slice_bits());
+    slice user_addr = in_msg_body~load_msg_addr();
+    int hashed_user_addr = slice_hash(user_addr);
+    (dic, _) = udict_add?(dic, 256, hashed_user_addr, begin_cell().end_cell().begin_parse());
+    save_data(count, admin_addr, dic);
+    return();
+  }
+  ;; remove user
+  if (opcode == op::remove) {
+    throw_unless(error:not_admin, sender_addr.slice_bits() == admin_addr.slice_bits());
+    slice user_addr = in_msg_body~load_msg_addr();
+    int hashed_user_addr = slice_hash(user_addr);
+    
+    (dic, _) = udict_delete?(dic, 256, hashed_user_addr);
+    save_data(count, admin_addr, dic);
+    return();
+  }
+
+  throw_unless(error:wrong_op, opcode == op::click);
+}
+
+int get_count() method_id {
+  (int count, slice admin_addr, cell dic) = load_data();
+  return count;
+}
+
+cell get_user_dic() method_id {
+  (int count, slice admin_addr, cell dic) = load_data();
+  return dic;
+}

@@ -1,0 +1,206 @@
+#include "imports.fc";
+
+(cell, cell) load_data() inline {
+  slice ds = get_data().begin_parse();
+  cell tracker_code = ds~load_ref();
+  cell vote_code = ds~load_ref();
+  ds.end_parse();
+  return (tracker_code, vote_code);
+}
+
+() save_data(cell tracker_code, cell vote_code) impure inline {
+  set_data(
+    begin_cell()
+    .store_ref(tracker_code)
+    .store_ref(vote_code)
+    .end_cell()
+  );
+}
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+  int opcode = in_msg_body~load_uint(32);
+
+  ;; user/tracker address
+  var cs = in_msg_full.begin_parse();
+  cs~load_uint(4);
+  slice sender_addr = cs~load_msg_addr();
+
+  (cell tracker_code, cell vote_code) = load_data();
+
+  ;; deploy op
+  if (opcode == 0) {
+    return();
+  }
+  ;; vote op
+  if (opcode == op::click) {
+    ;; vote id
+    int vote_id = in_msg_body~load_uint(64);
+
+    ;; send raw message to child contract
+    cell tracker_state_init = calculate_tracker_state_init(sender_addr, my_address(), tracker_code);
+    slice tracker_addr = calcualte_tracker_addr(sender_addr, my_address(), tracker_code);
+
+    cell msg_body_to_tracker = begin_cell().store_uint(vote_id, 64).end_cell();
+    var msg_to_tracker = 
+      begin_cell()
+      .store_uint(0x18, 6)
+      .store_slice(tracker_addr)
+      .store_coins(msg_value - 100000000)
+      .store_uint(7, 108)
+      .store_ref(tracker_state_init)
+      .store_ref(msg_body_to_tracker);
+
+    send_raw_message(msg_to_tracker.end_cell(), 1 | 16);
+    return();
+  }
+  ;; response op
+  if (opcode == op::response) {
+    ;; status_code, which we get from the tracker contract's response message
+    ;; 0: change
+    ;; 1: new
+    ;; 2: repeat
+    int status_code = in_msg_body~load_uint(64);
+    int new_vote_id = in_msg_body~load_uint(64);
+    int vote_id = in_msg_body~load_uint(64);
+
+    slice user_addr_in_msg = in_msg_body~load_msg_addr();
+    throw_unless(error:wrong_tracker, equal_slice_bits(sender_addr, calcualte_tracker_addr(user_addr_in_msg, my_address(), tracker_code)));
+    ;; change the value of the vote
+    if (status_code == status::change::tracker) {
+      cell vote_state_init_to_add = calculate_vote_state_init(new_vote_id, my_address(), vote_code);
+      slice vote_addr_to_add = calcualte_vote_addr(new_vote_id, my_address(), vote_code);
+
+      cell vote_state_init_to_reduce = calculate_vote_state_init(vote_id, my_address(), vote_code);
+      slice vote_addr_to_reduce = calcualte_vote_addr(vote_id, my_address(), vote_code);
+
+      cell msg_body_to_vote_add = 
+        begin_cell()
+        .store_uint(status::add::vote, 64)
+        .store_slice(user_addr_in_msg)
+        .end_cell();
+
+      var msg_to_vote_add = 
+        begin_cell()
+        .store_uint(0x18, 6)
+        .store_slice(vote_addr_to_add)
+        .store_coins(msg_value / 2 - 100000000)
+        .store_uint(7, 108)
+        .store_ref(vote_state_init_to_add)
+        .store_ref(msg_body_to_vote_add);
+
+      cell msg_body_to_vote_reduce = 
+        begin_cell()
+        .store_uint(status::remove::vote, 64)
+        .store_slice(user_addr_in_msg)
+        .end_cell();
+
+      var msg_to_vote_reduce = 
+        begin_cell()
+        .store_uint(0x18, 6)
+        .store_slice(vote_addr_to_reduce)
+        .store_coins(msg_value / 2 - 100000000)
+        .store_uint(7, 108)
+        .store_ref(vote_state_init_to_reduce)
+        .store_ref(msg_body_to_vote_reduce);
+      
+      send_raw_message(msg_to_vote_add.end_cell(), 1 | 16);
+      send_raw_message(msg_to_vote_reduce.end_cell(), 1 | 16);
+
+      return();
+    }
+    ;; add new vote
+    if (status_code == status::add::tracker) {
+      cell vote_state_init = calculate_vote_state_init(new_vote_id, my_address(), vote_code);
+      slice vote_addr = calcualte_vote_addr(new_vote_id, my_address(), vote_code);
+
+      cell msg_body_to_vote = 
+        begin_cell()
+        .store_uint(status::add::vote, 64)
+        .store_slice(user_addr_in_msg)
+        .end_cell();
+
+      var msg_to_vote = 
+        begin_cell()
+        .store_uint(0x18, 6)
+        .store_slice(vote_addr)
+        .store_coins(msg_value - 100000000)
+        .store_uint(7, 108)
+        .store_ref(vote_state_init)
+        .store_ref(msg_body_to_vote);
+
+      send_raw_message(msg_to_vote.end_cell(), 1 | 16);
+      return();
+    }
+    var msg_to_user = 
+      begin_cell()
+      .store_uint(0x18, 6)
+      .store_slice(user_addr_in_msg)
+      .store_coins(msg_value - 100000000)
+      .store_uint(0, 107);
+
+    send_raw_message(msg_to_user.end_cell(), 128);
+    return();
+  }
+}
+
+cell calculate_tracker_state_init(slice user_addr, slice clicker_addr, cell tracker_code) inline {
+    return begin_cell()
+    .store_uint(0, 2)
+    .store_maybe_ref(tracker_code)
+    .store_maybe_ref(
+        begin_cell()
+        .store_uint(0, 64)
+        .store_slice(user_addr)
+        .store_slice(clicker_addr)
+        .end_cell()
+    )
+    .store_uint(0, 1)
+    .end_cell();
+}
+
+cell calculate_vote_state_init(int vote_id, slice clicker_addr, cell vote_code) inline {
+    return begin_cell()
+    .store_uint(0, 2)
+    .store_maybe_ref(vote_code)
+    .store_maybe_ref(
+        begin_cell()
+        .store_uint(0, 64)
+        .store_uint(vote_id, 64)
+        .store_slice(clicker_addr)
+        .end_cell()
+    )
+    .store_uint(0, 1)
+    .end_cell();
+}
+
+slice calcualte_tracker_addr(slice user_addr, slice clicker_addr, cell tracker_code) inline {
+  cell state_init = calculate_tracker_state_init(user_addr, clicker_addr, tracker_code);
+  return begin_cell()
+  .store_uint(2, 2)
+  .store_uint(0, 1)
+  .store_int(0, 8)
+  .store_uint(cell_hash(state_init), 256)
+  .end_cell()
+  .begin_parse();
+}
+
+slice calcualte_vote_addr(int vote_id, slice clicker_addr, cell vote_code) inline {
+  cell state_init = calculate_vote_state_init(vote_id, clicker_addr, vote_code);
+  return begin_cell()
+  .store_uint(2, 2)
+  .store_uint(0, 1)
+  .store_int(0, 8)
+  .store_uint(cell_hash(state_init), 256)
+  .end_cell()
+  .begin_parse();
+}
+
+slice get_tracker_address(slice user_addr) method_id {
+    (cell tracker_code, cell vote_code) = load_data();
+    return calcualte_tracker_addr(user_addr, my_address(), tracker_code);
+}
+
+slice get_vote_address(int vote_id) method_id {
+    (cell tracker_code, cell vote_code) = load_data();
+    return calcualte_vote_addr(vote_id, my_address(), vote_code);
+}

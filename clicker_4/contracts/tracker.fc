@@ -1,0 +1,77 @@
+#include "imports.fc";
+
+(int, slice, slice) load_data() inline {
+  slice ds = get_data().begin_parse();
+  int vote_id = ds~load_uint(64);
+  slice user_addr = ds~load_msg_addr();
+  slice clicker_addr = ds~load_msg_addr();
+  ds.end_parse();
+  return (vote_id, user_addr, clicker_addr);
+}
+
+() save_data(int vote_id, slice user_addr, slice clicker_addr) impure inline {
+  set_data(
+    begin_cell()
+    .store_uint(vote_id, 64)
+    .store_slice(user_addr)
+    .store_slice(clicker_addr)
+    .end_cell()
+  );
+}
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+
+  (int vote_id, slice user_addr, slice clicker_addr) = load_data();
+
+  ;; get sender address, which should be the same as clicker_addr
+  var cs = in_msg_full.begin_parse();
+  cs~load_uint(4);
+  slice sender_addr = cs~load_msg_addr();
+
+  ;; throw error in case of getting message from other contract
+  throw_unless(error:wrong_clicker, equal_slice_bits(clicker_addr, sender_addr));
+
+  ;; read vote_id
+  int new_vote_id = in_msg_body~load_uint(64);
+  
+  ;; save vote
+  save_data(new_vote_id, user_addr, clicker_addr);
+
+  ;; status_code is used for checking if vote is new or change
+  int status_code = 0;
+
+  if (vote_id == 0) {
+    ;; it's user's first vote and the vote should be counted
+    status_code = 1;
+  }
+  if (vote_id == new_vote_id) {
+    status_code = 2;
+  }
+  ;; user changes his vote and it shouldn't be counted
+  ;; status code remains to be 0
+
+  cell msg_body_to_clicker = 
+    begin_cell()
+    .store_uint(op::response, 32)
+    .store_uint(status_code, 64)
+    .store_uint(new_vote_id, 64)
+    .store_uint(vote_id, 64)
+    .store_slice(user_addr)
+    .end_cell();
+  var msg = 
+    begin_cell()
+    .store_uint(0x18, 6)
+    .store_slice(clicker_addr)
+    .store_coins(msg_value - 100000000)
+    .store_uint(1, 107)
+    .store_ref(msg_body_to_clicker);
+  
+  ;; send message back to the clicker
+  send_raw_message(msg.end_cell(), 1 | 16);
+  return();
+}
+
+int get_vote_id() method_id {
+  (int vote_id, slice user_addr, slice clicker_addr) = load_data();
+  return vote_id;
+}

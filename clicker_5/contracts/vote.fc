@@ -1,0 +1,63 @@
+#include "imports.fc";
+
+(int, int, slice) load_data() inline {
+  slice ds = get_data().begin_parse();
+  int count = ds~load_uint(64);
+  int vote_id = ds~load_uint(64);
+  slice clicker_addr = ds~load_msg_addr();
+  ds.end_parse();
+  return (count, vote_id, clicker_addr);
+}
+
+() save_data(int count, int vote_id, slice clicker_addr) impure inline {
+  set_data(
+    begin_cell()
+    .store_uint(count, 64)
+    .store_uint(vote_id, 64)
+    .store_slice(clicker_addr)
+    .end_cell()
+  );
+}
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+
+  (int count, int vote_id, slice clicker_addr) = load_data();
+
+  ;; get sender address, which should be the same as clicker_addr
+  var cs = in_msg_full.begin_parse();
+  cs~load_uint(4);
+  slice sender_addr = cs~load_msg_addr();
+
+  ;; throw error in case of getting message from other contract
+  throw_unless(error:wrong_clicker, equal_slice_bits(clicker_addr, sender_addr));
+
+  ;; read vote_id
+  int status_code = in_msg_body~load_uint(64);
+  slice user_addr = in_msg_body~load_msg_addr();
+
+  if status_code == status::add::vote {
+    count += 1;
+  }
+  else {
+    count -= 1;
+  }
+  
+  ;; ;; save vote
+  save_data(count, vote_id, clicker_addr);
+
+  var msg = 
+    begin_cell()
+    .store_uint(0x18, 6)
+    .store_slice(user_addr)
+    .store_grams(0)
+    .store_uint(0, 107);
+  
+  ;; send message back to the user
+  send_raw_message(msg.end_cell(), 128);
+  return();
+}
+
+int get_count() method_id {
+  (int count, int vote_id, slice clicker_addr) = load_data();
+  return count;
+}
